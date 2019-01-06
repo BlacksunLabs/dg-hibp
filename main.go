@@ -53,7 +53,7 @@ func checkEmail(email string) (r *Results, err error) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Printf("error creating new request: %v")
+		log.Printf("error creating new request: %v", err)
 		return &Results{}, err
 	}
 
