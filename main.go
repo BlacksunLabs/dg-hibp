@@ -46,10 +46,10 @@ func checkEmail(email string) (r *Results, err error) {
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
+		log.Printf("error creating new request: %v")
 		return &Results{}, err
 	}
 
-	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("User-Agent", "Dr.Gero")
 	req.Header.Add("api-version", "2")
 	req.Header.Add("cache-control", "no-cache")
@@ -63,7 +63,7 @@ func checkEmail(email string) (r *Results, err error) {
 	body, _ := ioutil.ReadAll(res.Body)
 
 	r = &Results{}
-	err = json.Unmarshal(body, r)
+	err = json.Unmarshal(body, &r.Entries)
 	if err != nil {
 		return &Results{}, err
 	}
@@ -72,10 +72,11 @@ func checkEmail(email string) (r *Results, err error) {
 }
 
 func hasEmail(text string) bool {
-	re := regexp.MustCompile(`mailto:.*@.*\..* `)
+	re := regexp.MustCompile(`mailto:.*@.*\..* ?`)
 
 	match := re.FindStringSubmatch(text)
-	if len(match) < 1 || match[1] == "" {
+	if len(match) < 1 {
+		// log.Printf("string does not contain email")
 		return false
 	}
 
@@ -84,7 +85,7 @@ func hasEmail(text string) bool {
 
 func extractEmail(text string) (string, error) {
 
-	re := regexp.MustCompile(`mailto:(.*@.*\..*) .*$`)
+	re := regexp.MustCompile(`mailto:(.*@.*\.[a-zA-Z]+)`)
 
 	match := re.FindStringSubmatch(text)
 	if len(match) < 1 || match[1] == "" {
@@ -145,6 +146,7 @@ func main() {
 
 			ok := hasEmail(event.Message)
 			if !ok {
+				log.Printf("no email found")
 				break
 			}
 
