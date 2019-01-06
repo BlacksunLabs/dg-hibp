@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 
 	"github.com/BlacksunLabs/drgero/event"
@@ -36,8 +38,13 @@ type Response struct {
 type Results struct {
 	Entries []Response `json:"Entries"`
 }
+type postBody struct {
+	Body Results `json:"body"`
+}
 
 var m = new(mq.Client)
+var connectString string
+var hostString string
 
 func checkEmail(email string) (r *Results, err error) {
 	email = url.QueryEscape(email)
@@ -95,8 +102,49 @@ func extractEmail(text string) (string, error) {
 	return match[1], nil
 }
 
+func post(payload []byte, url string) error {
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "hibpwner")
+
+	client := &http.Client{}
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Send sends a JSON encoded Event a Dr.Gero host
+func (r *Results) send(host string) error {
+	var payload postBody
+	payload.Body = *r
+	body, err := json.Marshal(r)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/event", host)
+	err = post(body, url)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func main() {
-	err := m.Connect("amqp://guest:guest@localhost:5672")
+	connectString = os.Getenv("DG_CONNECT")
+	hostString = os.Getenv("DG_HOST")
+
+	if connectString == "" || hostString == "" {
+		log.Fatal("Must provide rabbitmq connect string and Dr.Gero API host in DG_CONNECT and DG_HOST environment variables, respectively")
+		return
+	}
+
+	// err := m.Connect("amqp://guest:guest@localhost:5672")
+	err := m.Connect(connectString)
 	if err != nil {
 		fmt.Printf("unable to connect to RabbitMQ : %v", err)
 	}
@@ -161,7 +209,11 @@ func main() {
 				log.Printf("error with HIBP API: %v", err)
 			}
 
-			log.Printf("%v", hits)
+			log.Printf("Sending results to Dr.Gero")
+			err = hits.send(hostString)
+			if err != nil {
+				log.Printf("failed sending to Dr.Gero: %v", err)
+			}
 		}
 	}()
 
